@@ -5,6 +5,7 @@ import { useDropzone } from 'react-dropzone'
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { motion } from "framer-motion"
 
 export default function PhotoEditor() {
   const [image, setImage] = useState<string | null>(null)
@@ -89,52 +90,74 @@ export default function PhotoEditor() {
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Photo Editor</h1>
-      <div {...getRootProps()} className="border-2 border-dashed border-gray-300 rounded-lg p-4 mb-4">
-        <input {...getInputProps()} />
-        {isDragActive ? (
-          <p>Drop the image here ...</p>
-        ) : (
-          <p>Drag 'n' drop an image here, or click to select an image</p>
-        )}
-      </div>
-      {image && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <h2 className="text-xl font-semibold mb-2">Original Image</h2>
-            <img src={image} alt="Original" className="max-w-full h-auto" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold mb-2">Edited Image</h2>
-            <canvas ref={canvasRef} className="hidden" />
-            {editedImage && <img src={editedImage} alt="Edited" className="max-w-full h-auto" />}
-            <div className="mt-4">
-              <Select onValueChange={(value) => setEffect(value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an effect" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  <SelectItem value="grayscale">Grayscale</SelectItem>
-                  <SelectItem value="sepia">Sepia</SelectItem>
-                  <SelectItem value="invert">Invert</SelectItem>
-                </SelectContent>
-              </Select>
+    <div className="min-h-screen min-w-full w-full bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col p-4">
+      <h1 className="text-3xl font-bold mb-4 text-center text-gray-800">Photo Editor</h1>
+      <div className="flex-grow flex flex-col md:flex-row gap-4">
+        <motion.div 
+          className="flex-1 bg-white bg-opacity-80 backdrop-filter backdrop-blur-lg rounded-2xl shadow-xl p-4 flex flex-col"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <h2 className="text-xl font-semibold mb-2 text-gray-700">Original Image</h2>
+          {image ? (
+            <img src={image} alt="Original" className="w-full h-full object-contain rounded-lg" />
+          ) : (
+            <div 
+              {...getRootProps()} 
+              className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer transition-all hover:border-blue-500 flex-grow flex items-center justify-center"
+            >
+              <input {...getInputProps()} />
+              <p className="text-lg text-gray-600">
+                {isDragActive ? "Drop the image here ..." : "Drag and drop an image here, or click to select"}
+              </p>
             </div>
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700">Intensity</label>
+          )}
+        </motion.div>
+        
+        <motion.div 
+          className="flex-1 bg-white bg-opacity-80 backdrop-filter backdrop-blur-lg rounded-2xl shadow-xl p-4 flex flex-col"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          <h2 className="text-xl font-semibold mb-2 text-gray-700">Edited Image</h2>
+          <canvas ref={canvasRef} className="hidden" />
+          {editedImage ? (
+            <img src={editedImage} alt="Edited" className="w-full h-full object-contain rounded-lg mb-4" />
+          ) : (
+            <div className="flex-grow flex items-center justify-center text-gray-500">
+              No image edited yet
+            </div>
+          )}
+          <div className="space-y-4 mt-auto">
+            <Select onValueChange={(value) => setEffect(value)}>
+              <SelectTrigger className="w-full bg-white border-gray-300">
+                <SelectValue placeholder="Select an effect" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="grayscale">Grayscale</SelectItem>
+                <SelectItem value="sepia">Sepia</SelectItem>
+                <SelectItem value="invert">Invert</SelectItem>
+              </SelectContent>
+            </Select>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Intensity</label>
               <Slider
                 value={[intensity]}
                 onValueChange={(value) => setIntensity(value[0])}
                 max={100}
                 step={1}
+                className="bg-gray-200"
               />
             </div>
-            <Button onClick={handleSave} className="mt-4">Save Edited Image</Button>
+            <Button onClick={handleSave} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-full transition-colors duration-300">
+              Save Edited Image
+            </Button>
           </div>
-        </div>
-      )}
+        </motion.div>
+      </div>
     </div>
   )
 }
