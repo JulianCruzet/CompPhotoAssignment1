@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { motion } from "framer-motion"
 
+
+
 export default function PhotoEditor() {
   const [image, setImage] = useState<string | null>(null)
   const [editedImage, setEditedImage] = useState<string | null>(null)
