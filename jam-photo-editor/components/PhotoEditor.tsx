@@ -2,17 +2,34 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Slider } from "@/components/ui/slider"
+import Image from 'next/image'
+import Histogram from './Histogram'
+import Filters from './Filters'
+import Adjustments from './Adjustments'
+import ResizeImage from './ResizeImage'
+import SaveLoad from './SaveLoad'
+import PaintedLook from './PaintedLook'
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { motion } from "framer-motion"
 
 export default function PhotoEditor() {
   const [image, setImage] = useState<string | null>(null)
   const [editedImage, setEditedImage] = useState<string | null>(null)
-  const [effect, setEffect] = useState('none')
-  const [intensity, setIntensity] = useState(50)
+  const [originalImageData, setOriginalImageData] = useState<ImageData | null>(null)
+  const [showHistogram, setShowHistogram] = useState(false)
+  const [imageData, setImageData] = useState<ImageData | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [filters, setFilters] = useState({
+    grayscale: false,
+    sepia: false,
+    averagingFilter: 0,
+    gaussianFilter: 0
+  })
+  const [adjustments, setAdjustments] = useState({
+    saturation: 100,
+    contrast: 100,
+    temperature: 100
+  })
+  const [paintedLook, setPaintedLook] = useState(0)
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
@@ -25,59 +42,64 @@ export default function PhotoEditor() {
     reader.readAsDataURL(file)
   }, [])
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop })
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
+    onDrop,
+    accept: {
+      'image/*': ['.jpeg', '.jpg', '.png', '.gif']
+    }
+  })
 
   useEffect(() => {
     if (image) {
-      applyEffect()
-    }
-  }, [image, effect, intensity])
-
-  const applyEffect = () => {
-    const canvas = canvasRef.current
-    const ctx = canvas?.getContext('2d')
-
-    if (!canvas || !ctx || !image) return
-
-    const img = new Image()
-    img.onload = () => {
-      canvas.width = img.width
-      canvas.height = img.height
-      ctx.drawImage(img, 0, 0)
-
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      const data = imageData.data
-
-      switch (effect) {
-        case 'grayscale':
-          for (let i = 0; i < data.length; i += 4) {
-            const avg = (data[i] + data[i + 1] + data[i + 2]) / 3
-            data[i] = data[i + 1] = data[i + 2] = avg
+      const img = new window.Image()
+      img.onload = () => {
+        const canvas = canvasRef.current
+        if (canvas) {
+          canvas.width = img.width
+          canvas.height = img.height
+          const ctx = canvas.getContext('2d')
+          if (ctx) {
+            ctx.drawImage(img, 0, 0)
+            const newImageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+            setImageData(newImageData)
+            setOriginalImageData(newImageData)
+            setEditedImage(canvas.toDataURL())
           }
-          break
-        case 'sepia':
-          for (let i = 0; i < data.length; i += 4) {
-            const r = data[i]
-            const g = data[i + 1]
-            const b = data[i + 2]
-            data[i] = Math.min(255, (r * 0.393) + (g * 0.769) + (b * 0.189))
-            data[i + 1] = Math.min(255, (r * 0.349) + (g * 0.686) + (b * 0.168))
-            data[i + 2] = Math.min(255, (r * 0.272) + (g * 0.534) + (b * 0.131))
-          }
-          break
-        case 'invert':
-          for (let i = 0; i < data.length; i += 4) {
-            data[i] = 255 - data[i]
-            data[i + 1] = 255 - data[i + 1]
-            data[i + 2] = 255 - data[i + 2]
-          }
-          break
+        }
       }
-
-      ctx.putImageData(imageData, 0, 0)
-      setEditedImage(canvas.toDataURL())
+      img.src = image
     }
-    img.src = image
+  }, [image])
+
+  const applyChanges = (newImageData: ImageData) => {
+    const canvas = canvasRef.current
+    if (canvas) {
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.putImageData(newImageData, 0, 0)
+        setImageData(newImageData)
+        setEditedImage(canvas.toDataURL())
+      }
+    }
+  }
+
+  const resetImage = () => {
+    if (originalImageData) {
+      setImageData(originalImageData)
+      applyChanges(originalImageData)
+      setFilters({
+        grayscale: false,
+        sepia: false,
+        averagingFilter: 0,
+        gaussianFilter: 0
+      })
+      setAdjustments({
+        saturation: 100,
+        contrast: 100,
+        temperature: 100
+      })
+      setPaintedLook(0)
+    }
   }
 
   const handleSave = () => {
@@ -90,74 +112,56 @@ export default function PhotoEditor() {
   }
 
   return (
-    <div className="min-h-screen min-w-full w-full bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col p-4">
-      <h1 className="text-3xl font-bold mb-4 text-center text-gray-800">Photo Editor</h1>
-      <div className="flex-grow flex flex-col md:flex-row gap-4">
-        <motion.div 
-          className="flex-1 bg-white bg-opacity-80 backdrop-filter backdrop-blur-lg rounded-2xl shadow-xl p-4 flex flex-col"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <h2 className="text-xl font-semibold mb-2 text-gray-700">Original Image</h2>
-          {image ? (
-            <img src={image} alt="Original" className="w-full h-full object-contain rounded-lg" />
-          ) : (
-            <div 
-              {...getRootProps()} 
-              className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer transition-all hover:border-blue-500 flex-grow flex items-center justify-center"
-            >
-              <input {...getInputProps()} />
-              <p className="text-lg text-gray-600">
-                {isDragActive ? "Drop the image here ..." : "Drag and drop an image here, or click to select"}
-              </p>
-            </div>
-          )}
-        </motion.div>
-        
-        <motion.div 
-          className="flex-1 bg-white bg-opacity-80 backdrop-filter backdrop-blur-lg rounded-2xl shadow-xl p-4 flex flex-col"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-        >
-          <h2 className="text-xl font-semibold mb-2 text-gray-700">Edited Image</h2>
-          <canvas ref={canvasRef} className="hidden" />
-          {editedImage ? (
-            <img src={editedImage} alt="Edited" className="w-full h-full object-contain rounded-lg mb-4" />
-          ) : (
-            <div className="flex-grow flex items-center justify-center text-gray-500">
-              No image edited yet
-            </div>
-          )}
-          <div className="space-y-4 mt-auto">
-            <Select onValueChange={(value) => setEffect(value)}>
-              <SelectTrigger className="w-full bg-white border-gray-300">
-                <SelectValue placeholder="Select an effect" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                <SelectItem value="grayscale">Grayscale</SelectItem>
-                <SelectItem value="sepia">Sepia</SelectItem>
-                <SelectItem value="invert">Invert</SelectItem>
-              </SelectContent>
-            </Select>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Intensity</label>
-              <Slider
-                value={[intensity]}
-                onValueChange={(value) => setIntensity(value[0])}
-                max={100}
-                step={1}
-                className="bg-gray-200"
-              />
-            </div>
-            <Button onClick={handleSave} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-full transition-colors duration-300">
-              Save Edited Image
-            </Button>
-          </div>
-        </motion.div>
+    <div className="container mx-auto p-4">
+      <h1 className="text-3xl font-bold mb-4">Photo Editor</h1>
+      <div 
+        {...getRootProps()} 
+        className="border-2 border-dashed border-gray-300 rounded-lg p-4 mb-4 text-center cursor-pointer"
+      >
+        <input {...getInputProps()} />
+        {isDragActive ? (
+          <p>Drop the image here ...</p>
+        ) : (
+          <p>Drag 'n' drop an image here, or click to select an image</p>
+        )}
       </div>
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+      {editedImage ? (
+        <div className="mt-4">
+          <div style={{ position: 'relative', width: '100%', height: '300px' }}>
+            <Image 
+              src={editedImage} 
+              alt="Edited image" 
+              layout="fill"
+              objectFit="contain"
+            />
+          </div>
+          <div className="mt-4 space-y-4">
+            <Button onClick={() => setShowHistogram(!showHistogram)}>
+              {showHistogram ? 'Hide Histogram' : 'Show Histogram'}
+            </Button>
+            <Button onClick={resetImage}>Reset Image</Button>
+            {showHistogram && imageData && <Histogram imageData={imageData} />}
+            <Filters imageData={imageData} applyChanges={applyChanges} filters={filters} setFilters={setFilters}/>
+            <Adjustments imageData={imageData} applyChanges={applyChanges} adjustments={adjustments} setAdjustments={setAdjustments}/>
+            <PaintedLook imageData={imageData} applyChanges={applyChanges} paintedLook={paintedLook} setPaintedLook={setPaintedLook}/>
+            <ResizeImage imageData={imageData} applyChanges={applyChanges} />
+            <SaveLoad 
+              imageData={imageData}
+              applyChanges={applyChanges}
+              filters={filters}
+              adjustments={adjustments}
+              paintedLook={paintedLook}
+              setFilters={setFilters}
+              setAdjustments={setAdjustments}
+              setPaintedLook={setPaintedLook}
+            />
+            <Button onClick={handleSave}>Save Image</Button>
+          </div>
+        </div>
+      ) : (
+        <p>No image uploaded yet</p>
+      )}
     </div>
   )
 }
