@@ -11,8 +11,9 @@ import SaveLoad from './SaveLoad'
 import PaintedLook from './PaintedLook'
 import TextOverlay from './TextOverlay'
 import DrawingTools from './DrawingTools'
+import LocalizedEditing from './LocalizedEditing'
 import { Button } from "@/components/ui/button"
-import { RotateCcw, RotateCw, FlipHorizontal, FlipVertical, Type, Pencil } from 'lucide-react'
+import { RotateCcw, RotateCw, FlipHorizontal, FlipVertical, Type, Pencil, Edit3 } from 'lucide-react'
 
 const Dropdown = ({ title, children }: { title: string; children: React.ReactNode }) => {
   const [isOpen, setIsOpen] = useState(false)
@@ -43,6 +44,7 @@ export default function PhotoEditor() {
   const [originalImageData, setOriginalImageData] = useState<ImageData | null>(null)
   const [showHistogram, setShowHistogram] = useState(false)
   const [imageData, setImageData] = useState<ImageData | null>(null)
+  const [imageBitmap, setImageBitmap] = useState<ImageBitmap | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const transformCanvasRef = useRef<HTMLCanvasElement>(null)
   const [filters, setFilters] = useState({
@@ -60,6 +62,7 @@ export default function PhotoEditor() {
   const [transform, setTransform] = useState<Transform>({ rotation: 0, flipHorizontal: false, flipVertical: false })
   const [showTextOverlay, setShowTextOverlay] = useState(false)
   const [showDrawingTools, setShowDrawingTools] = useState(false)
+  const [localEditState, setLocalEditState] = useState({ show: false, hideImage: false });
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
@@ -82,7 +85,7 @@ export default function PhotoEditor() {
   useEffect(() => {
     if (image) {
       const img = new window.Image()
-      img.onload = () => {
+      img.onload = async () => {
         const canvas = canvasRef.current
         if (canvas) {
           canvas.width = img.width
@@ -94,6 +97,10 @@ export default function PhotoEditor() {
             setImageData(newImageData)
             setOriginalImageData(newImageData)
             setEditedImage(canvas.toDataURL())
+
+            // Create ImageBitmap for LocalizedEditing
+            const bitmap = await createImageBitmap(img)
+            setImageBitmap(bitmap)
           }
         }
       }
@@ -210,7 +217,7 @@ export default function PhotoEditor() {
               {isDragActive ? (
                 <p className="text-lg text-gray-600">Drop the image here ...</p>
               ) : (
-                <p className="text-lg text-gray-600">Drag 'n' drop an image here, or click to select an image</p>
+                <p className="text-lg text-gray-600">Drag and drop an image here, or click to select an image</p>
               )}
             </div>
           ) : (
@@ -220,20 +227,41 @@ export default function PhotoEditor() {
                 alt="Edited image" 
                 layout="fill"
                 objectFit="contain"
+                className={localEditState.hideImage ? 'hidden' : ''}
               />
+              {localEditState.show && imageBitmap && (
+                <div className="absolute inset-0 z-10 bg-white">
+                  <button
+                    className="absolute top-2 right-2 z-20 p-2 bg-gray-200 rounded-full hover:bg-gray-300 transition-colors"
+                    onClick={() => setLocalEditState({ show: false, hideImage: false })}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                  <LocalizedEditing
+                    image={imageBitmap}
+                    onEdit={applyChanges}
+                  />
+                </div>
+              )}
               {showTextOverlay && (
-                <TextOverlay
-                  applyChanges={applyChanges}
-                  imageData={imageData}
-                  onClose={() => setShowTextOverlay(false)}
-                />
+                <div className="absolute inset-0 z-10">
+                  <TextOverlay
+                    applyChanges={applyChanges}
+                    imageData={imageData}
+                    onClose={() => setShowTextOverlay(false)}
+                  />
+                </div>
               )}
               {showDrawingTools && (
-                <DrawingTools
-                  applyChanges={applyChanges}
-                  imageData={imageData}
-                  onClose={() => setShowDrawingTools(false)}
-                />
+                <div className="absolute inset-0 z-10">
+                  <DrawingTools
+                    applyChanges={applyChanges}
+                    imageData={imageData}
+                    onClose={() => setShowDrawingTools(false)}
+                  />
+                </div>
               )}
             </div>
           )}
@@ -249,7 +277,7 @@ export default function PhotoEditor() {
                 <Button onClick={() => flipImage('horizontal')} className="w-full"><FlipHorizontal className="w-4 h-4 mr-2" />Flip H</Button>
                 <Button onClick={() => flipImage('vertical')} className="w-full"><FlipVertical className="w-4 h-4 mr-2" />Flip V</Button>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <Button onClick={() => setShowTextOverlay(!showTextOverlay)} className="w-full">
                   <Type className="w-4 h-4 mr-2" />
                   {showTextOverlay ? 'Hide Text' : 'Add Text'}
@@ -257,6 +285,10 @@ export default function PhotoEditor() {
                 <Button onClick={() => setShowDrawingTools(!showDrawingTools)} className="w-full">
                   <Pencil className="w-4 h-4 mr-2" />
                   {showDrawingTools ? 'Hide Draw' : 'Draw'}
+                </Button>
+                <Button onClick={() => setLocalEditState({ show: !localEditState.show, hideImage: !localEditState.show })} className="w-full">
+                  <Edit3 className="w-4 h-4 mr-2" />
+                  {localEditState.show ? 'Hide Edit' : 'Local Edit'}
                 </Button>
               </div>
               <Dropdown title="Image Controls">
