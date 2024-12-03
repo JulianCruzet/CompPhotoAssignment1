@@ -18,16 +18,23 @@ const Dropdown = ({ title, children }: { title: string; children: React.ReactNod
   const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <div className="border rounded-md mb-2">
+    <div className="border rounded-md mb-2 overflow-hidden">
       <button
-        className="w-full p-2 text-left font-semibold bg-gray-100 hover:bg-gray-200 transition-colors"
+        className="w-full p-3 text-left font-semibold bg-gray-100 hover:bg-gray-200 transition-colors flex justify-between items-center"
         onClick={() => setIsOpen(!isOpen)}
       >
-        {title} {isOpen ? '▲' : '▼'}
+        <span>{title}</span>
+        <span className="text-gray-500">{isOpen ? '▲' : '▼'}</span>
       </button>
-      {isOpen && <div className="p-2">{children}</div>}
+      {isOpen && <div className="p-3 bg-white">{children}</div>}
     </div>
   )
+}
+
+interface Transform {
+  rotation: number;
+  flipHorizontal: boolean;
+  flipVertical: boolean;
 }
 
 export default function PhotoEditor() {
@@ -37,6 +44,7 @@ export default function PhotoEditor() {
   const [showHistogram, setShowHistogram] = useState(false)
   const [imageData, setImageData] = useState<ImageData | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const transformCanvasRef = useRef<HTMLCanvasElement>(null)
   const [filters, setFilters] = useState({
     grayscale: false,
     sepia: false,
@@ -49,8 +57,7 @@ export default function PhotoEditor() {
     temperature: 100
   })
   const [paintedLook, setPaintedLook] = useState(0)
-  const [rotation, setRotation] = useState(0)
-  const [flip, setFlip] = useState({ horizontal: false, vertical: false })
+  const [transform, setTransform] = useState<Transform>({ rotation: 0, flipHorizontal: false, flipVertical: false })
   const [showTextOverlay, setShowTextOverlay] = useState(false)
   const [showDrawingTools, setShowDrawingTools] = useState(false)
 
@@ -94,6 +101,30 @@ export default function PhotoEditor() {
     }
   }, [image])
 
+  const applyTransform = useCallback((imageData: ImageData, transform: Transform) => {
+    const { rotation, flipHorizontal, flipVertical } = transform
+    const sourceCanvas = canvasRef.current
+    const targetCanvas = transformCanvasRef.current
+    if (!sourceCanvas || !targetCanvas) return null
+
+    const ctx = targetCanvas.getContext('2d')
+    if (!ctx) return null
+
+    const { width, height } = imageData
+    const isRotated90or270 = rotation % 180 !== 0
+    targetCanvas.width = isRotated90or270 ? height : width
+    targetCanvas.height = isRotated90or270 ? width : height
+
+    ctx.save()
+    ctx.translate(targetCanvas.width / 2, targetCanvas.height / 2)
+    ctx.rotate((rotation * Math.PI) / 180)
+    ctx.scale(flipHorizontal ? -1 : 1, flipVertical ? -1 : 1)
+    ctx.drawImage(sourceCanvas, -width / 2, -height / 2, width, height)
+    ctx.restore()
+
+    return ctx.getImageData(0, 0, targetCanvas.width, targetCanvas.height)
+  }, [])
+
   const applyChanges = useCallback((newImageData: ImageData) => {
     const canvas = canvasRef.current
     if (canvas) {
@@ -103,47 +134,36 @@ export default function PhotoEditor() {
       if (ctx) {
         ctx.putImageData(newImageData, 0, 0)
         setImageData(newImageData)
-        setEditedImage(canvas.toDataURL())
+        const transformedImageData = applyTransform(newImageData, transform)
+        if (transformedImageData) {
+          setEditedImage(transformCanvasRef.current!.toDataURL())
+        }
       }
     }
-  }, [])
+  }, [transform, applyTransform])
 
   const rotateImage = useCallback((direction: 'cw' | 'ccw') => {
-    if (!imageData) return
-    const canvas = document.createElement('canvas')
-    canvas.width = imageData.height
-    canvas.height = imageData.width
-    const ctx = canvas.getContext('2d')
-    if (ctx) {
-      ctx.translate(canvas.width / 2, canvas.height / 2)
-      ctx.rotate(direction === 'cw' ? Math.PI / 2 : -Math.PI / 2)
-      ctx.drawImage(canvasRef.current!, -imageData.width / 2, -imageData.height / 2)
-      const newImageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      applyChanges(newImageData)
-      setRotation((prev) => (prev + (direction === 'cw' ? 90 : -90)) % 360)
-    }
-  }, [imageData, applyChanges])
+    setTransform(prev => ({
+      ...prev,
+      rotation: (prev.rotation + (direction === 'cw' ? 90 : -90) + 360) % 360
+    }))
+  }, [])
 
   const flipImage = useCallback((direction: 'horizontal' | 'vertical') => {
-    if (!imageData) return
-    const canvas = document.createElement('canvas')
-    canvas.width = imageData.width
-    canvas.height = imageData.height
-    const ctx = canvas.getContext('2d')
-    if (ctx) {
-      if (direction === 'horizontal') {
-        ctx.translate(canvas.width, 0)
-        ctx.scale(-1, 1)
-      } else {
-        ctx.translate(0, canvas.height)
-        ctx.scale(1, -1)
+    setTransform(prev => ({
+      ...prev,
+      [direction === 'horizontal' ? 'flipHorizontal' : 'flipVertical']: !prev[direction === 'horizontal' ? 'flipHorizontal' : 'flipVertical']
+    }))
+  }, [])
+
+  useEffect(() => {
+    if (imageData) {
+      const transformedImageData = applyTransform(imageData, transform)
+      if (transformedImageData) {
+        setEditedImage(transformCanvasRef.current!.toDataURL())
       }
-      ctx.drawImage(canvasRef.current!, 0, 0)
-      const newImageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      applyChanges(newImageData)
-      setFlip((prev) => ({ ...prev, [direction]: !prev[direction] }))
     }
-  }, [imageData, applyChanges])
+  }, [imageData, transform, applyTransform])
 
   const resetImage = useCallback(() => {
     if (originalImageData) {
@@ -161,8 +181,7 @@ export default function PhotoEditor() {
         temperature: 100
       })
       setPaintedLook(0)
-      setRotation(0)
-      setFlip({ horizontal: false, vertical: false })
+      setTransform({ rotation: 0, flipHorizontal: false, flipVertical: false })
     }
   }, [originalImageData, applyChanges])
 
@@ -176,34 +195,31 @@ export default function PhotoEditor() {
   }, [editedImage])
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-screen bg-gray-100">
       <nav className="bg-primary text-primary-foreground p-4 shadow-md">
         <h1 className="text-2xl font-bold text-center">JAM PHOTO EDITOR</h1>
       </nav>
       <div className="flex flex-col md:flex-row flex-grow overflow-hidden">
-        <div className="w-full md:w-2/3 p-4 flex flex-col overflow-auto">
+        <div className="w-full md:w-2/3 p-6 flex flex-col overflow-auto">
           {!editedImage ? (
             <div 
               {...getRootProps()} 
-              className="border-2 border-dashed border-gray-300 rounded-lg p-4 mb-4 text-center cursor-pointer flex-grow flex items-center justify-center"
+              className="border-2 border-dashed border-gray-300 rounded-lg p-8 mb-6 text-center cursor-pointer flex-grow flex items-center justify-center bg-white shadow-sm hover:border-primary transition-colors"
             >
               <input {...getInputProps()} />
               {isDragActive ? (
-                <p>Drop the image here ...</p>
+                <p className="text-lg text-gray-600">Drop the image here ...</p>
               ) : (
-                <p>Drag 'n' drop an image here, or click to select an image</p>
+                <p className="text-lg text-gray-600">Drag 'n' drop an image here, or click to select an image</p>
               )}
             </div>
           ) : (
-            <div className="flex-grow relative">
+            <div className="flex-grow relative bg-white rounded-lg shadow-md overflow-hidden">
               <Image 
                 src={editedImage} 
                 alt="Edited image" 
                 layout="fill"
                 objectFit="contain"
-                style={{
-                  transform: `rotate(${rotation}deg) scale(${flip.horizontal ? -1 : 1}, ${flip.vertical ? -1 : 1})`,
-                }}
               />
               {showTextOverlay && (
                 <TextOverlay
@@ -222,26 +238,25 @@ export default function PhotoEditor() {
             </div>
           )}
           <canvas ref={canvasRef} style={{ display: 'none' }} />
+          <canvas ref={transformCanvasRef} style={{ display: 'none' }} />
         </div>
-        <div className="w-full md:w-1/3 p-4 overflow-y-auto bg-secondary">
+        <div className="w-full md:w-1/3 p-6 overflow-y-auto bg-white shadow-md">
           {editedImage && (
-            <div className="space-y-4">
-              <div className="flex space-x-2">
-                <Button onClick={() => rotateImage('ccw')}><RotateCcw className="w-4 h-4 mr-2" />Rotate CCW</Button>
-                <Button onClick={() => rotateImage('cw')}><RotateCw className="w-4 h-4 mr-2" />Rotate CW</Button>
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <Button onClick={() => rotateImage('ccw')} className="w-full"><RotateCcw className="w-4 h-4 mr-2" />Rotate CCW</Button>
+                <Button onClick={() => rotateImage('cw')} className="w-full"><RotateCw className="w-4 h-4 mr-2" />Rotate CW</Button>
+                <Button onClick={() => flipImage('horizontal')} className="w-full"><FlipHorizontal className="w-4 h-4 mr-2" />Flip H</Button>
+                <Button onClick={() => flipImage('vertical')} className="w-full"><FlipVertical className="w-4 h-4 mr-2" />Flip V</Button>
               </div>
-              <div className="flex space-x-2">
-                <Button onClick={() => flipImage('horizontal')}><FlipHorizontal className="w-4 h-4 mr-2" />Flip H</Button>
-                <Button onClick={() => flipImage('vertical')}><FlipVertical className="w-4 h-4 mr-2" />Flip V</Button>
-              </div>
-              <div className="flex space-x-2">
-                <Button onClick={() => setShowTextOverlay(!showTextOverlay)}>
+              <div className="grid grid-cols-2 gap-4">
+                <Button onClick={() => setShowTextOverlay(!showTextOverlay)} className="w-full">
                   <Type className="w-4 h-4 mr-2" />
-                  {showTextOverlay ? 'Hide Text Overlay' : 'Show Text Overlay'}
+                  {showTextOverlay ? 'Hide Text' : 'Add Text'}
                 </Button>
-                <Button onClick={() => setShowDrawingTools(!showDrawingTools)}>
+                <Button onClick={() => setShowDrawingTools(!showDrawingTools)} className="w-full">
                   <Pencil className="w-4 h-4 mr-2" />
-                  {showDrawingTools ? 'Hide Drawing Tools' : 'Show Drawing Tools'}
+                  {showDrawingTools ? 'Hide Draw' : 'Draw'}
                 </Button>
               </div>
               <Dropdown title="Image Controls">
