@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
 import HydrationBarrier from './HydrationBarrier';
+import PanoramaCreator from './PanoramaCreator';
+import { Button } from "@/components/ui/button"
 
 const LocalizedEditing = dynamic(() => import('./LocalizedEditing'), {
   ssr: false,
@@ -28,19 +30,20 @@ const ImageEditor: React.FC<{ image: ImageBitmap | null }> = ({ image }) => {
   };
 
   return (
-    <div>
+    <div className="space-y-8">
       {/* other editing tools */}
       <HydrationBarrier>
         {image && (
-          <>
+          <div className="space-y-4">
             <LocalizedEditing
               image={image}
               onEdit={(imageData) => setEditedImageData(imageData)}
             />
-            <button onClick={saveImage}>Save</button>
-          </>
+            <Button onClick={saveImage}>Save</Button>
+          </div>
         )}
       </HydrationBarrier>
+      <PanoramaCreator />
     </div>
   );
 };
