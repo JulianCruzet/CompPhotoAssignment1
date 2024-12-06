@@ -2,10 +2,50 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
+<<<<<<< Updated upstream
 import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { motion } from "framer-motion"
+=======
+import Image from 'next/image'
+import Histogram from './Histogram'
+import Filters from './Filters'
+import Adjustments from './Adjustments'
+import ResizeImage from './ResizeImage'
+import SaveLoad from './SaveLoad'
+import PaintedLook from './PaintedLook'
+import TextOverlay from './TextOverlay'
+import DrawingTools from './DrawingTools'
+import LocalizedEditing from './LocalizedEditing'
+import PanoramaCreator from './PanoramaCreator'
+import { Button } from "@/components/ui/button"
+import { RotateCcw, RotateCw, FlipHorizontal, FlipVertical, Type, Pencil, Edit3, ImageIcon } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+
+const Dropdown = ({ title, children }: { title: string; children: React.ReactNode }) => {
+  const [isOpen, setIsOpen] = useState(false)
+
+  return (
+    <div className="border rounded-md mb-2 overflow-hidden">
+      <button
+        className="w-full p-3 text-left font-semibold bg-gray-100 hover:bg-gray-200 transition-colors flex justify-between items-center"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span>{title}</span>
+        <span className="text-gray-500">{isOpen ? '▲' : '▼'}</span>
+      </button>
+      {isOpen && <div className="p-3 bg-white">{children}</div>}
+    </div>
+  )
+}
+
+interface Transform {
+  rotation: number;
+  flipHorizontal: boolean;
+  flipVertical: boolean;
+}
+>>>>>>> Stashed changes
 
 export default function PhotoEditor() {
   const [image, setImage] = useState<string | null>(null)
@@ -13,6 +53,28 @@ export default function PhotoEditor() {
   const [effect, setEffect] = useState('none')
   const [intensity, setIntensity] = useState(50)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+<<<<<<< Updated upstream
+=======
+  const transformCanvasRef = useRef<HTMLCanvasElement>(null)
+  const [filters, setFilters] = useState({
+    grayscale: false,
+    sepia: false,
+    averagingFilter: 0,
+    gaussianFilter: 0
+  })
+  const [adjustments, setAdjustments] = useState({
+    saturation: 100,
+    contrast: 100,
+    temperature: 100
+  })
+  const [paintedLook, setPaintedLook] = useState(0)
+  const [transform, setTransform] = useState<Transform>({ rotation: 0, flipHorizontal: false, flipVertical: false })
+  const [showTextOverlay, setShowTextOverlay] = useState(false)
+  const [showDrawingTools, setShowDrawingTools] = useState(false)
+  const [localEditState, setLocalEditState] = useState({ show: false, hideImage: false });
+  const [showPanoramaCreator, setShowPanoramaCreator] = useState(false)
+  const [panoramaImages, setPanoramaImages] = useState<File[]>([])
+>>>>>>> Stashed changes
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
@@ -25,7 +87,17 @@ export default function PhotoEditor() {
     reader.readAsDataURL(file)
   }, [])
 
+<<<<<<< Updated upstream
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop })
+=======
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
+    onDrop,
+    accept: {
+      'image/*': ['.jpeg', '.jpg', '.png', '.gif']
+    },
+    multiple: false
+  })
+>>>>>>> Stashed changes
 
   useEffect(() => {
     if (image) {
@@ -87,6 +159,10 @@ export default function PhotoEditor() {
       link.download = 'edited_image.png'
       link.click()
     }
+  }
+
+  const handlePanoramaImagesUpload = (files: File[]) => {
+    setPanoramaImages(files)
   }
 
   return (
@@ -152,11 +228,108 @@ export default function PhotoEditor() {
                 className="bg-gray-200"
               />
             </div>
+<<<<<<< Updated upstream
             <Button onClick={handleSave} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-full transition-colors duration-300">
               Save Edited Image
             </Button>
           </div>
         </motion.div>
+=======
+          )}
+          <canvas ref={canvasRef} style={{ display: 'none' }} />
+          <canvas ref={transformCanvasRef} style={{ display: 'none' }} />
+        </div>
+        <div className="w-full md:w-1/3 p-6 overflow-y-auto bg-white shadow-md">
+          {editedImage && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <Button onClick={() => rotateImage('ccw')} className="w-full"><RotateCcw className="w-4 h-4 mr-2" />Rotate CCW</Button>
+                <Button onClick={() => rotateImage('cw')} className="w-full"><RotateCw className="w-4 h-4 mr-2" />Rotate CW</Button>
+                <Button onClick={() => flipImage('horizontal')} className="w-full"><FlipHorizontal className="w-4 h-4 mr-2" />Flip H</Button>
+                <Button onClick={() => flipImage('vertical')} className="w-full"><FlipVertical className="w-4 h-4 mr-2" />Flip V</Button>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <Button onClick={() => setShowTextOverlay(!showTextOverlay)} className="w-full">
+                  <Type className="w-4 h-4 mr-2" />
+                  {showTextOverlay ? 'Hide Text' : 'Add Text'}
+                </Button>
+                <Button onClick={() => setShowDrawingTools(!showDrawingTools)} className="w-full">
+                  <Pencil className="w-4 h-4 mr-2" />
+                  {showDrawingTools ? 'Hide Draw' : 'Draw'}
+                </Button>
+                <Button onClick={() => setLocalEditState({ show: !localEditState.show, hideImage: !localEditState.show })} className="w-full">
+                  <Edit3 className="w-4 h-4 mr-2" />
+                  {localEditState.show ? 'Hide Edit' : 'Local Edit'}
+                </Button>
+              </div>
+              <Button 
+                onClick={() => setShowPanoramaCreator(!showPanoramaCreator)} 
+                className="w-full"
+                variant={showPanoramaCreator ? "secondary" : "default"}
+              >
+                <ImageIcon className="w-4 h-4 mr-2" />
+                {showPanoramaCreator ? 'Hide Panorama' : 'Create Panorama'}
+              </Button>
+              {showPanoramaCreator && (
+                <PanoramaCreator
+                  images={panoramaImages}
+                  onImagesSelect={handlePanoramaImagesUpload}
+                />
+              )}
+              <Dropdown title="Image Controls">
+                <div className="space-y-4">
+                  <Button className="w-full" onClick={() => setShowHistogram(!showHistogram)}>
+                    {showHistogram ? 'Hide Histogram' : 'Show Histogram'}
+                  </Button>
+                  <Button className="w-full" onClick={resetImage}>Reset Image</Button>
+                  <Button className="w-full" onClick={handleSave}>Save Image</Button>
+                </div>
+                {showHistogram && imageData && <Histogram
+ imageData={imageData} />}
+              </Dropdown>
+              
+              <Dropdown title="Filters">
+                <Filters imageData={imageData} applyChanges={applyChanges} filters={filters} setFilters={setFilters}/>
+              </Dropdown>
+              
+              <Dropdown title="Adjustments">
+                <Adjustments 
+                  imageData={imageData}
+                  applyChanges={applyChanges}
+                  adjustments={adjustments} 
+                  setAdjustments={setAdjustments}
+                />
+              </Dropdown>
+              
+              <Dropdown title="Painted Look">
+                <PaintedLook 
+                  imageData={originalImageData} 
+                  applyChanges={applyChanges} 
+                  paintedLook={paintedLook} 
+                  setPaintedLook={setPaintedLook}
+                />
+              </Dropdown>
+              
+              <Dropdown title="Resize Image">
+                <ResizeImage imageData={imageData} applyChanges={applyChanges} />
+              </Dropdown>
+              
+              <Dropdown title="Save/Load Settings">
+                <SaveLoad 
+                  imageData={imageData}
+                  applyChanges={applyChanges}
+                  filters={filters}
+                  adjustments={adjustments}
+                  paintedLook={paintedLook}
+                  setFilters={setFilters}
+                  setAdjustments={setAdjustments}
+                  setPaintedLook={setPaintedLook}
+                />
+              </Dropdown>
+            </div>
+          )}
+        </div>
+>>>>>>> Stashed changes
       </div>
     </div>
   )
