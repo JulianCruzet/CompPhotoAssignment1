@@ -12,8 +12,12 @@ import PaintedLook from './PaintedLook'
 import TextOverlay from './TextOverlay'
 import DrawingTools from './DrawingTools'
 import LocalizedEditing from './LocalizedEditing'
+import PanoramaCreator from './PanoramaCreator'
+import ObjectRemoval from './ObjectRemoval'
+import MagicWandSelector from './MagicWandSelector'
 import { Button } from "@/components/ui/button"
-import { RotateCcw, RotateCw, FlipHorizontal, FlipVertical, Type, Pencil, Edit3 } from 'lucide-react'
+import { RotateCcw, RotateCw, FlipHorizontal, FlipVertical, Type, Pencil, Edit3, ImageIcon, Eraser, Wand2 } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
 const Dropdown = ({ title, children }: { title: string; children: React.ReactNode }) => {
   const [isOpen, setIsOpen] = useState(false)
@@ -63,6 +67,10 @@ export default function PhotoEditor() {
   const [showTextOverlay, setShowTextOverlay] = useState(false)
   const [showDrawingTools, setShowDrawingTools] = useState(false)
   const [localEditState, setLocalEditState] = useState({ show: false, hideImage: false });
+  const [showPanoramaCreator, setShowPanoramaCreator] = useState(false)
+  const [panoramaImages, setPanoramaImages] = useState<File[]>([])
+  const [showObjectRemoval, setShowObjectRemoval] = useState(false)
+  const [showMagicWand, setShowMagicWand] = useState(false)
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
@@ -79,7 +87,8 @@ export default function PhotoEditor() {
     onDrop,
     accept: {
       'image/*': ['.jpeg', '.jpg', '.png', '.gif']
-    }
+    },
+    multiple: false
   })
 
   useEffect(() => {
@@ -201,6 +210,43 @@ export default function PhotoEditor() {
     }
   }, [editedImage])
 
+  const handlePanoramaImagesUpload = (files: File[]) => {
+    setPanoramaImages(files); // Replace instead of concatenating
+  };
+
+  const handleCreatePanorama = (panoramaImage: string) => {
+    setEditedImage(panoramaImage);
+    setShowPanoramaCreator(false);
+  };
+
+  const handleMagicWandSelection = (selection: { mask: ImageData; original: ImageData }) => {
+    const canvas = document.createElement('canvas')
+    canvas.width = selection.original.width
+    canvas.height = selection.original.height
+    const ctx = canvas.getContext('2d')!
+
+    // Draw the original image
+    ctx.putImageData(selection.original, 0, 0)
+
+    // Create a temporary canvas for the mask
+    const maskCanvas = document.createElement('canvas')
+    maskCanvas.width = selection.mask.width
+    maskCanvas.height = selection.mask.height
+    const maskCtx = maskCanvas.getContext('2d')!
+    maskCtx.putImageData(selection.mask, 0, 0)
+
+    // Use the mask as a clipping path
+    ctx.globalCompositeOperation = 'destination-in'
+    ctx.drawImage(maskCanvas, 0, 0)
+
+    // Get the final image data
+    const finalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+
+    // Apply the selection
+    applyChanges(finalImageData)
+    setShowMagicWand(false)
+  }
+
   return (
     <div className="flex flex-col h-screen bg-gray-100">
       <nav className="bg-primary text-primary-foreground p-4 shadow-md">
@@ -263,6 +309,41 @@ export default function PhotoEditor() {
                   />
                 </div>
               )}
+              {showObjectRemoval && editedImage && (
+                <div className="absolute inset-0 z-10 bg-white">
+                  <button
+                    className="absolute top-2 right-2 z-20 p-2 bg-gray-200 rounded-full hover:bg-gray-300 transition-colors"
+                    onClick={() => setShowObjectRemoval(false)}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                  <ObjectRemoval
+                    image={editedImage}
+                    onProcessed={(processedImageData) => {
+                      applyChanges(processedImageData)
+                      setShowObjectRemoval(false)
+                    }}
+                  />
+                </div>
+              )}
+              {showMagicWand && editedImage && (
+                <div className="absolute inset-0 z-10 bg-white">
+                  <button
+                    className="absolute top-2 right-2 z-20 p-2 bg-gray-200 rounded-full hover:bg-gray-300 transition-colors"
+                    onClick={() => setShowMagicWand(false)}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                  <MagicWandSelector
+                    image={editedImage}
+                    onSelection={handleMagicWandSelection}
+                  />
+                </div>
+              )}
             </div>
           )}
           <canvas ref={canvasRef} style={{ display: 'none' }} />
@@ -291,6 +372,52 @@ export default function PhotoEditor() {
                   {localEditState.show ? 'Hide Edit' : 'Local Edit'}
                 </Button>
               </div>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <Button 
+                    onClick={() => setShowObjectRemoval(!showObjectRemoval)} 
+                    className="w-full h-[42px] flex items-center justify-center"
+                    variant="default"
+                  >
+                    <Eraser className="w-4 h-4 mr-2" />
+                    {showObjectRemoval ? 'Hide' : 'Remove'} Object
+                  </Button>
+                  <Button 
+                    onClick={() => setShowMagicWand(!showMagicWand)} 
+                    className="w-full h-[42px] flex items-center justify-center"
+                    variant={showMagicWand ? "secondary" : "default"}
+                  >
+                    <Wand2 className="w-4 h-4 mr-2" />
+                    {showMagicWand ? 'Hide' : 'Use'} Magic Wand
+                  </Button>
+                </div>
+                <Button 
+                  onClick={() => setShowPanoramaCreator(!showPanoramaCreator)} 
+                  className="w-full h-[42px] flex items-center justify-center"
+                  variant={showPanoramaCreator ? "secondary" : "default"}
+                >
+                  <ImageIcon className="w-4 h-4 mr-2" />
+                  {showPanoramaCreator ? 'Hide' : 'Create'} Panorama
+                </Button>
+              </div>
+              {showPanoramaCreator && (
+                <div className="absolute inset-0 z-10 bg-white">
+                  <button
+                    className="absolute top-2 right-2 z-20 p-2 bg-gray-200 rounded-full hover:bg-gray-300 transition-colors"
+                    onClick={() => setShowPanoramaCreator(false)}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                  <PanoramaCreator
+                    images={panoramaImages}
+                    onImagesSelect={handlePanoramaImagesUpload}
+                    onCreatePanorama={handleCreatePanorama}
+                    currentImage={image}
+                  />
+                </div>
+              )}
               <Dropdown title="Image Controls">
                 <div className="space-y-4">
                   <Button className="w-full" onClick={() => setShowHistogram(!showHistogram)}>
