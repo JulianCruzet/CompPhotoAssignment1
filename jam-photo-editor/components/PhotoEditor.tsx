@@ -12,12 +12,10 @@ import PaintedLook from './PaintedLook'
 import TextOverlay from './TextOverlay'
 import DrawingTools from './DrawingTools'
 import LocalizedEditing from './LocalizedEditing'
-import PanoramaCreator from './PanoramaCreator'
 import ObjectRemoval from './ObjectRemoval'
 import MagicWandSelector from './MagicWandSelector'
 import { Button } from "@/components/ui/button"
-import { RotateCcw, RotateCw, FlipHorizontal, FlipVertical, Type, Pencil, Edit3, ImageIcon, Eraser, Wand2 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { RotateCcw, RotateCw, FlipHorizontal, FlipVertical, Type, Pencil, Edit3, Eraser, Wand2 } from 'lucide-react'
 
 const Dropdown = ({ title, children }: { title: string; children: React.ReactNode }) => {
   const [isOpen, setIsOpen] = useState(false)
@@ -67,10 +65,9 @@ export default function PhotoEditor() {
   const [showTextOverlay, setShowTextOverlay] = useState(false)
   const [showDrawingTools, setShowDrawingTools] = useState(false)
   const [localEditState, setLocalEditState] = useState({ show: false, hideImage: false });
-  const [showPanoramaCreator, setShowPanoramaCreator] = useState(false)
-  const [panoramaImages, setPanoramaImages] = useState<File[]>([])
-  const [showObjectRemoval, setShowObjectRemoval] = useState(false)
-  const [showMagicWand, setShowMagicWand] = useState(false)
+  const [showObjectRemoval, setShowObjectRemoval] = useState(false);
+  const [showMagicWand, setShowMagicWand] = useState(false);
+  const [selectionMask, setSelectionMask] = useState<ImageData | null>(null);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
@@ -87,8 +84,7 @@ export default function PhotoEditor() {
     onDrop,
     accept: {
       'image/*': ['.jpeg', '.jpg', '.png', '.gif']
-    },
-    multiple: false
+    }
   })
 
   useEffect(() => {
@@ -148,15 +144,31 @@ export default function PhotoEditor() {
       canvas.height = newImageData.height
       const ctx = canvas.getContext('2d')
       if (ctx) {
-        ctx.putImageData(newImageData, 0, 0)
-        setImageData(newImageData)
-        const transformedImageData = applyTransform(newImageData, transform)
+        if (selectionMask) {
+          // Apply changes only to the selected area
+          const currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          for (let i = 0; i < newImageData.data.length; i += 4) {
+            if (selectionMask.data[i + 3] > 0) {
+              currentImageData.data[i] = newImageData.data[i];
+              currentImageData.data[i + 1] = newImageData.data[i + 1];
+              currentImageData.data[i + 2] = newImageData.data[i + 2];
+              currentImageData.data[i + 3] = newImageData.data[i + 3];
+            }
+          }
+          ctx.putImageData(currentImageData, 0, 0);
+        } else {
+          // If no selection, apply changes to the entire image
+          ctx.putImageData(newImageData, 0, 0);
+        }
+
+        setImageData(ctx.getImageData(0, 0, canvas.width, canvas.height));
+        const transformedImageData = applyTransform(ctx.getImageData(0, 0, canvas.width, canvas.height), transform)
         if (transformedImageData) {
           setEditedImage(transformCanvasRef.current!.toDataURL())
         }
       }
     }
-  }, [transform, applyTransform])
+  }, [transform, applyTransform, selectionMask])
 
   const rotateImage = useCallback((direction: 'cw' | 'ccw') => {
     setTransform(prev => ({
@@ -198,6 +210,7 @@ export default function PhotoEditor() {
       })
       setPaintedLook(0)
       setTransform({ rotation: 0, flipHorizontal: false, flipVertical: false })
+      setSelectionMask(null)
     }
   }, [originalImageData, applyChanges])
 
@@ -210,42 +223,70 @@ export default function PhotoEditor() {
     }
   }, [editedImage])
 
-  const handlePanoramaImagesUpload = (files: File[]) => {
-    setPanoramaImages(files); // Replace instead of concatenating
-  };
+  const handleObjectRemoval = useCallback((processedImageData: ImageData) => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.width = processedImageData.width;
+      canvas.height = processedImageData.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.putImageData(processedImageData, 0, 0);
+        const newEditedImage = canvas.toDataURL();
+        setEditedImage(newEditedImage);
+        setImageData(processedImageData);
 
-  const handleCreatePanorama = (panoramaImage: string) => {
-    setEditedImage(panoramaImage);
-    setShowPanoramaCreator(false);
-  };
+        // Apply the current transform to the new image
+        const transformedImageData = applyTransform(processedImageData, transform);
+        if (transformedImageData) {
+          setEditedImage(transformCanvasRef.current!.toDataURL());
+        }
 
-  const handleMagicWandSelection = (selection: { mask: ImageData; original: ImageData }) => {
-    const canvas = document.createElement('canvas')
-    canvas.width = selection.original.width
-    canvas.height = selection.original.height
-    const ctx = canvas.getContext('2d')!
+        // Force a re-render of the image
+        setEditedImage(prevImage => {
+          if (prevImage) {
+            return prevImage + '?' + new Date().getTime();
+          }
+          return null;
+        });
+      }
+    }
+    setShowObjectRemoval(false);
+  }, [applyTransform, transform]);
 
-    // Draw the original image
-    ctx.putImageData(selection.original, 0, 0)
+  const handleMagicWandSelection = useCallback((selection: { mask: ImageData; original: ImageData }) => {
+    setSelectionMask(selection.mask);
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // Draw the original image
+        ctx.putImageData(selection.original, 0, 0);
 
-    // Create a temporary canvas for the mask
-    const maskCanvas = document.createElement('canvas')
-    maskCanvas.width = selection.mask.width
-    maskCanvas.height = selection.mask.height
-    const maskCtx = maskCanvas.getContext('2d')!
-    maskCtx.putImageData(selection.mask, 0, 0)
+        // Apply the semi-transparent red mask
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = 'red';
+        for (let y = 0; y < selection.mask.height; y++) {
+          for (let x = 0; x < selection.mask.width; x++) {
+            if (selection.mask.data[(y * selection.mask.width + x) * 4 + 3] > 0) {
+              ctx.fillRect(x, y, 1, 1);
+            }
+          }
+        }
+        ctx.globalAlpha = 1.0;
 
-    // Use the mask as a clipping path
-    ctx.globalCompositeOperation = 'destination-in'
-    ctx.drawImage(maskCanvas, 0, 0)
+        setEditedImage(canvas.toDataURL());
+        setImageData(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      }
+    }
+    setShowMagicWand(false);
+  }, []);
 
-    // Get the final image data
-    const finalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-
-    // Apply the selection
-    applyChanges(finalImageData)
-    setShowMagicWand(false)
-  }
+  const clearSelection = useCallback(() => {
+    setSelectionMask(null);
+    if (imageData) {
+      applyChanges(imageData);
+    }
+  }, [imageData, applyChanges]);
 
   return (
     <div className="flex flex-col h-screen bg-gray-100">
@@ -301,7 +342,7 @@ export default function PhotoEditor() {
                 </div>
               )}
               {showDrawingTools && (
-                <div className="absolute inset-0 z-10">
+                <div<div className="absolute inset-0 z-10">
                   <DrawingTools
                     applyChanges={applyChanges}
                     imageData={imageData}
@@ -309,39 +350,15 @@ export default function PhotoEditor() {
                   />
                 </div>
               )}
-              {showObjectRemoval && editedImage && (
-                <div className="absolute inset-0 z-10 bg-white">
-                  <button
-                    className="absolute top-2 right-2 z-20 p-2 bg-gray-200 rounded-full hover:bg-gray-300 transition-colors"
-                    onClick={() => setShowObjectRemoval(false)}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                  <ObjectRemoval
-                    image={editedImage}
-                    onProcessed={(processedImageData) => {
-                      applyChanges(processedImageData)
-                      setShowObjectRemoval(false)
-                    }}
-                  />
-                </div>
-              )}
               {showMagicWand && editedImage && (
-                <div className="absolute inset-0 z-10 bg-white">
-                  <button
-                    className="absolute top-2 right-2 z-20 p-2 bg-gray-200 rounded-full hover:bg-gray-300 transition-colors"
-                    onClick={() => setShowMagicWand(false)}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                <div className="absolute inset-0 z-10 bg-transparent">
                   <MagicWandSelector
                     image={editedImage}
                     onSelection={handleMagicWandSelection}
                   />
+                  <Button onClick={() => setShowMagicWand(false)} className="absolute top-4 right-4">
+                    Close Magic Wand
+                  </Button>
                 </div>
               )}
             </div>
@@ -371,53 +388,18 @@ export default function PhotoEditor() {
                   <Edit3 className="w-4 h-4 mr-2" />
                   {localEditState.show ? 'Hide Edit' : 'Local Edit'}
                 </Button>
-              </div>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <Button 
-                    onClick={() => setShowObjectRemoval(!showObjectRemoval)} 
-                    className="w-full h-[42px] flex items-center justify-center"
-                    variant="default"
-                  >
-                    <Eraser className="w-4 h-4 mr-2" />
-                    {showObjectRemoval ? 'Hide' : 'Remove'} Object
-                  </Button>
-                  <Button 
-                    onClick={() => setShowMagicWand(!showMagicWand)} 
-                    className="w-full h-[42px] flex items-center justify-center"
-                    variant={showMagicWand ? "secondary" : "default"}
-                  >
-                    <Wand2 className="w-4 h-4 mr-2" />
-                    {showMagicWand ? 'Hide' : 'Use'} Magic Wand
-                  </Button>
-                </div>
-                <Button 
-                  onClick={() => setShowPanoramaCreator(!showPanoramaCreator)} 
-                  className="w-full h-[42px] flex items-center justify-center"
-                  variant={showPanoramaCreator ? "secondary" : "default"}
-                >
-                  <ImageIcon className="w-4 h-4 mr-2" />
-                  {showPanoramaCreator ? 'Hide' : 'Create'} Panorama
+                <Button onClick={() => setShowObjectRemoval(!showObjectRemoval)} className="w-full">
+                  <Eraser className="w-4 h-4 mr-2" />
+                  {showObjectRemoval ? 'Hide Removal' : 'Remove Object'}
+                </Button>
+                <Button onClick={() => setShowMagicWand(!showMagicWand)} className="w-full">
+                  <Wand2 className="w-4 h-4 mr-2" />
+                  {showMagicWand ? 'Hide Magic Wand' : 'Magic Wand'}
+                </Button>
+                <Button onClick={clearSelection} className="w-full">
+                  Clear Selection
                 </Button>
               </div>
-              {showPanoramaCreator && (
-                <div className="absolute inset-0 z-10 bg-white">
-                  <button
-                    className="absolute top-2 right-2 z-20 p-2 bg-gray-200 rounded-full hover:bg-gray-300 transition-colors"
-                    onClick={() => setShowPanoramaCreator(false)}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                  <PanoramaCreator
-                    images={panoramaImages}
-                    onImagesSelect={handlePanoramaImagesUpload}
-                    onCreatePanorama={handleCreatePanorama}
-                    currentImage={image}
-                  />
-                </div>
-              )}
               <Dropdown title="Image Controls">
                 <div className="space-y-4">
                   <Button className="w-full" onClick={() => setShowHistogram(!showHistogram)}>
@@ -471,6 +453,13 @@ export default function PhotoEditor() {
           )}
         </div>
       </div>
+      {showObjectRemoval && editedImage && (
+        <ObjectRemoval
+          image={editedImage}
+          onProcessed={handleObjectRemoval}
+          onClose={() => setShowObjectRemoval(false)}
+        />
+      )}
     </div>
   )
 }
