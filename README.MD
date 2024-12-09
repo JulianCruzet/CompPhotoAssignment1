@@ -1,6 +1,6 @@
-Hello all, this is our final project for Computatioanal Photography of Fall 2024.
+## Hello all, this is our final project for Computatioanal Photography of Fall 2024.
 
-Special Thansk to the following:
+## Special Thanks to the following:
 - Julian Cruzet
 - Ali Shamsi
 - Mohsin Qureshi
