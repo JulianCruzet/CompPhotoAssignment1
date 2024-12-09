@@ -7,7 +7,6 @@ import { Slider } from "@/components/ui/slider"
 import { RotateCcw, RotateCw, FlipHorizontal, FlipVertical, Type, Pencil, Edit3, Eraser, Wand2, LayersIcon, Eye, EyeOff, Trash2, Plus, ChevronUp, ChevronDown, Upload } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 
-// Assume these components are defined in separate files
 import Histogram from './Histogram'
 import Filters from './Filters'
 import Adjustments from './Adjustments'
